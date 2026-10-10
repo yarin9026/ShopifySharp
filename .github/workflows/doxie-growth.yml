@@ -1,0 +1,62 @@
+name: DoxieGrowth
+
+# Runs the free growth tool against the Shopify store from the Actions tab — no local install needed.
+# Requires repository secrets SHOPIFY_SHOP, SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET (see tools/DoxieGrowth/README.md).
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "What to run"
+        type: choice
+        default: audit
+        options:
+          - audit
+          - pinterest
+          - fix-seo (preview)
+          - fix-seo --apply
+      board:
+        description: "Pinterest board name (pinterest only; the board must already exist)"
+        default: "Dachshund Shirts & Gifts"
+      per_day:
+        description: "Pins per day (pinterest only)"
+        default: "3"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run DoxieGrowth
+        working-directory: tools/DoxieGrowth
+        env:
+          SHOPIFY_SHOP: ${{ secrets.SHOPIFY_SHOP }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          COMMAND: ${{ inputs.command }}
+          BOARD: ${{ inputs.board }}
+          PER_DAY: ${{ inputs.per_day }}
+        run: |
+          case "$COMMAND" in
+            audit)              dotnet run -- audit ;;
+            pinterest)          dotnet run -- pinterest --board "$BOARD" --per-day "$PER_DAY" --out pinterest-pins.csv ;;
+            "fix-seo (preview)") dotnet run -- fix-seo ;;
+            "fix-seo --apply")  dotnet run -- fix-seo --apply ;;
+          esac
+
+      - name: Upload Pinterest CSV
+        if: inputs.command == 'pinterest'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pinterest-pins
+          path: tools/DoxieGrowth/pinterest-pins.csv
