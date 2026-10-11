@@ -156,6 +156,7 @@
     animation: rise 260ms ease-out;
     cursor: default;
   }
+  .card:focus { outline: none; }
   .eyebrow { margin: 0; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
   .final { margin: 4px 0 0; font-family: var(--font-display); font-size: 76px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--batter); }
   .final-label { margin: 0; color: var(--muted); }
@@ -216,6 +217,14 @@
 
   :root[lang="he"] .eyebrow, :root[lang="he"] .cta, :root[lang="he"] .best-line { letter-spacing: 0; }
 
+  /* Landscape phones: smaller sign so it stays clear of the stack. */
+  @media (max-height: 440px) {
+    .overlay.menu { padding-top: 12px; }
+    .sign { gap: 8px; }
+    .logo { font-size: clamp(32px, 11vh, 78px); }
+    .rules { display: none; }
+  }
+
   @keyframes hum { 0%, 91%, 95%, 100% { opacity: 1; } 93% { opacity: 0.55; } }
   @keyframes pulse { 50% { opacity: 0.45; } }
   @keyframes rise { from { transform: translateY(14px); opacity: 0.4; } }
@@ -249,7 +258,7 @@
   </div>
 
   <div class="overlay over" id="over" hidden>
-    <div class="card" role="dialog" aria-labelledby="overTitle">
+    <div class="card" id="card" role="dialog" aria-labelledby="overTitle" tabindex="-1">
       <p class="eyebrow" id="overTitle">The stack fell</p>
       <p class="final" id="final">0</p>
       <p class="final-label" id="finalLabel">pancakes</p>
@@ -369,7 +378,7 @@
       });
       // Ad-blocker detection can take a few seconds; it only changes the "Continue" button.
       Promise.resolve(this.call(s => s.ad.hasAdblock()))
-        .then(blocked => { this.adblock = blocked === true; })
+        .then(blocked => { this.adblock = blocked === true; if (this.adblock) markContinueBlocked(); })
         .catch(() => {});
     },
 
@@ -387,9 +396,13 @@
     },
     saveBest(value) {
       if (this.on) {
-        try { this.sdk.data.setItem("best", String(value)); return; } catch {}
+        try {
+          const stored = Number(this.sdk.data.getItem("best")) || 0;
+          this.sdk.data.setItem("best", String(Math.max(stored, value)));
+          return;
+        } catch {}
       }
-      local.set("best", value);
+      local.set("best", Math.max(Number(local.get("best")) || 0, value));
     },
 
     // Resolves with { ok, code } once the ad has finished or failed. Never resolves before then,
@@ -405,11 +418,12 @@
           adPlaying = false;
           resolve(result);
         };
-        // Last-resort guard so a lost callback can never freeze the game.
-        const guard = setTimeout(() => finish({ ok: false, code: "timeout" }), 90000);
+        // Last-resort guard for an ad that never starts, so a lost callback can't freeze the game.
+        // Once an ad is playing, the SDK always follows with adFinished or adError.
+        const guard = setTimeout(() => finish({ ok: false, code: "timeout" }), 60000);
         try {
           Promise.resolve(this.sdk.ad.requestAd(type, {
-            adStarted: () => { if (!settled) adPlaying = true; },
+            adStarted: () => { if (!settled) { clearTimeout(guard); adPlaying = true; } },
             adFinished: () => finish({ ok: true }),
             adError: error => finish({ ok: false, code: error && error.code })
           })).catch(() => finish({ ok: false, code: "other" }));
@@ -480,6 +494,8 @@
   let cam = 0, shake = 0, time = 0, overAt = 0, round = 0;
   let score = 0, combo = 0, best = 0;
   let continuedThisRun = false, rewardedOff = false;
+  let runStartBest = 0, celebratedThisRun = false;
+  let playSince = 0, cardAt = 0;   // guards against taps and keys that carry over between screens
 
   function makePancake(x, w, perfect) {
     const specks = [];
@@ -493,6 +509,8 @@
     chunks = []; particles = []; popups = [];
     faller = null; score = 0; combo = 0; cam = 0; shake = 0;
     continuedThisRun = false;
+    runStartBest = best;
+    celebratedThisRun = false;
     spawnMover();
     renderScore(false);
   }
@@ -565,6 +583,7 @@
     $("menu").hidden = true;
     $("over").hidden = true;
     $("hud").hidden = false;
+    playSince = time;
     Platform.call(s => s.game.gameplayStart());
   }
 
@@ -574,20 +593,30 @@
     setAdBusy(true);
     if (!MEDIA) await Platform.showAd("midgame");
     setAdBusy(false);
+    window.focus();
     startGame();
   }
 
   // Rewarded ad: the player explicitly chooses to watch one to keep their tower.
   async function continueWithAd() {
-    if (adBusy || !canContinue() || Platform.adblock) return;
+    if (adBusy || !canContinue()) return;
+    if (Platform.adblock) { markContinueBlocked(); return; }
     setAdBusy(true);
     const result = await Platform.showAd("rewarded");
     setAdBusy(false);
+    window.focus();
     if (result.ok) { revive(); return; }
     if (result.code === "adblock" || result.code === "adsDisabledBasicLaunch") rewardedOff = true;
     $("continue").hidden = true;
     showNotice(result.code === "adblock" ? T.adblock : T.noAd);
-    $("again").focus({ preventScroll: true });
+    $("card").focus({ preventScroll: true });
+  }
+
+  // With an ad blocker the Continue button stays visible but disabled, with a note saying why.
+  function markContinueBlocked() {
+    if ($("over").hidden || $("continue").hidden) return;
+    $("continue").disabled = true;
+    showNotice(T.adblock);
   }
 
   function canContinue() {
@@ -601,6 +630,7 @@
     $("over").hidden = true;
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     spawnMover();
+    playSince = time;
     Platform.call(s => s.game.gameplayStart());
   }
 
@@ -625,7 +655,7 @@
   }
 
   function drop() {
-    if (!mover || faller) return;
+    if (!mover || faller || time - playSince < 0.2) return;
     faller = { x: mover.x, w: mover.w, y: rowBottom(stack.length) + HOVER, vy: 0, tint: mover.tint };
     mover = null;
   }
@@ -683,13 +713,15 @@
     shake = reduceMotion ? 0 : 9;
     Platform.call(s => s.game.gameplayStop());
 
-    const previousBest = best;
-    const isNewBest = score > best;
-    if (isNewBest) {
+    const isNewBest = score > runStartBest;
+    if (score > best) {
       best = score;
       Platform.saveBest(best);
-      // Celebrate real records only, not the first game or tiny scores.
-      if (previousBest > 0 && score >= 10) Platform.call(s => s.game.happytime());
+    }
+    // Celebrate real records only (not the first game or tiny scores), once per run.
+    if (isNewBest && runStartBest > 0 && score >= 10 && !celebratedThisRun) {
+      celebratedThisRun = true;
+      Platform.call(s => s.game.happytime());
     }
     renderScore(false);
 
@@ -706,8 +738,10 @@
       $("continue").hidden = !offerContinue;
       setAdBusy(false);
       showNotice(offerContinue && Platform.adblock ? T.adblock : "");
+      cardAt = performance.now();
       $("over").hidden = false;
-      $(offerContinue && !Platform.adblock ? "continue" : "again").focus({ preventScroll: true });
+      // Focus the card, never a button: the drop key must not press "Continue" (an ad) by accident.
+      $("card").focus({ preventScroll: true });
     }, 750);
   }
 
@@ -1037,17 +1071,25 @@
   stage.addEventListener("pointerdown", e => {
     if (e.target.closest("button, .card")) return;
     e.preventDefault();
+    window.focus();
     act();
   });
+  const SCROLL_KEYS = ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End"];
+  const cardIsNew = () => state === "over" && (time - overAt <= 0.9 || performance.now() - cardAt < 400);
   window.addEventListener("keydown", e => {
-    if (e.repeat || !["Space", "Enter", "ArrowDown"].includes(e.code)) return;
-    if (document.activeElement && document.activeElement.tagName === "BUTTON") return;
+    const onButton = document.activeElement && document.activeElement.tagName === "BUTTON";
+    // Game keys must never scroll the portal page around the game frame.
+    if (SCROLL_KEYS.includes(e.code) && !(onButton && e.code === "Space")) e.preventDefault();
+    if (!["Space", "Enter", "ArrowDown"].includes(e.code)) return;
+    // Right after a game over, swallow the drop key so it can't press a card button by accident.
+    if (cardIsNew() || (state === "over" && e.repeat)) { e.preventDefault(); return; }
+    if (e.repeat || onButton) return;
     e.preventDefault();
     act();
   });
 
-  $("again").addEventListener("click", () => { sfx.unlock(); playAgain(); });
-  $("continue").addEventListener("click", () => { sfx.unlock(); continueWithAd(); });
+  $("again").addEventListener("click", () => { if (cardIsNew()) return; sfx.unlock(); playAgain(); });
+  $("continue").addEventListener("click", () => { if (cardIsNew()) return; sfx.unlock(); continueWithAd(); });
 
   $("share").addEventListener("click", () => {
     const text = T.shareText(score);
@@ -1109,7 +1151,16 @@
     else requestAnimationFrame(frame);
 
     // Wait for the platform (at most a few seconds) so the right save is loaded before play.
-    await Promise.race([Platform.init(), new Promise(r => setTimeout(r, 5000))]);
+    const init = Platform.init();
+    await Promise.race([init, new Promise(r => setTimeout(r, 5000))]);
+    if (!Platform.on) init.then(() => {
+      if (!Platform.on) return;
+      renderMute();
+      best = Math.max(best, Platform.loadBest());
+      Platform.saveBest(best);
+      renderScore(false);
+      if (state === "play") Platform.call(s => s.game.gameplayStart());
+    });
     renderMute();
     Platform.call(s => s.game.loadingStart());
     best = Math.max(best, Platform.loadBest(), data && typeof data.best === "number" && !Platform.on ? data.best : 0);
