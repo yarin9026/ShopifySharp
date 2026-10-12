@@ -1,0 +1,1180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Short Stack</title>
+<!-- CrazyGames SDK v3. Outside CrazyGames (or if it fails to load) the game runs without ads. -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+<style>
+  /* Fonts ship with the game (latin + hebrew subsets, SIL Open Font License, see fonts/OFL-*.txt). */
+  @font-face { font-family: "Monoton"; font-weight: 400; font-display: swap; src: url(fonts/monoton-latin.woff2) format("woff2"); }
+  @font-face { font-family: "Rubik"; font-weight: 300 900; font-display: swap; src: url(fonts/rubik-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: "Rubik"; font-weight: 300 900; font-display: swap; src: url(fonts/rubik-hebrew.woff2) format("woff2"); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+  @font-face { font-family: "Secular One"; font-weight: 400; font-display: swap; src: url(fonts/secular-one-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: "Secular One"; font-weight: 400; font-display: swap; src: url(fonts/secular-one-hebrew.woff2) format("woff2"); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+</style>
+<style>
+  /* Layout: one full-height late-night diner counter. The canvas fills it; score floats at the top,
+     the neon logo and the game-over card float above the stack. Deliberately one dark look (night diner). */
+  :root {
+    --wall: #133540;
+    --wall-deep: #0a1e25;
+    --neon: #ff5c9d;
+    --neon-soft: #ffb3d1;
+    --batter: #f1c374;
+    --ink: #f7f0e3;
+    --muted: #9cc2c6;
+    --card: rgba(8, 24, 30, 0.9);
+    --font-sign: "Monoton", "Secular One", system-ui, sans-serif;
+    --font-display: "Secular One", "Rubik", system-ui, sans-serif;
+    --font-body: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--wall-deep);
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow: hidden;
+  }
+
+  .stage {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .hud {
+    position: absolute;
+    inset: 0 0 auto 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 18px 16px 0;
+    pointer-events: none;
+  }
+  .score {
+    font-family: var(--font-display);
+    font-size: clamp(56px, 15vw, 88px);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+    transition: transform 120ms ease-out;
+  }
+  .score.bump { transform: scale(1.12); }
+  .best-line {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mute {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(156, 194, 198, 0.35);
+    border-radius: 50%;
+    background: rgba(8, 24, 30, 0.55);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .mute svg { width: 20px; height: 20px; }
+  .mute[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+  .mute:focus-visible, .btn:focus-visible, .link-btn:focus-visible { outline: 3px solid var(--batter); outline-offset: 3px; }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    pointer-events: none;
+  }
+  .overlay.menu { align-items: flex-start; padding-top: max(12vh, 56px); }
+  .overlay.over { align-items: center; }
+
+  .sign { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; max-width: 30ch; }
+  .logo {
+    margin: 0;
+    font-family: var(--font-sign);
+    font-weight: 400;
+    font-size: clamp(46px, 14vw, 78px);
+    line-height: 1.02;
+    color: var(--neon-soft);
+    text-shadow:
+      0 0 4px #fff,
+      0 0 10px var(--neon),
+      0 0 24px var(--neon),
+      0 0 48px rgba(255, 92, 157, 0.55);
+    animation: hum 5s infinite;
+  }
+  .tagline { margin: 0; font-family: var(--font-display); font-size: 20px; text-wrap: balance; }
+  .rules { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; text-wrap: balance; }
+  .cta {
+    margin: 10px 0 0;
+    min-height: 1.2em;
+    font-size: 13px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--batter);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+
+  .card {
+    pointer-events: auto;
+    width: min(340px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 26px 22px 20px;
+    text-align: center;
+    background: var(--card);
+    border: 1px solid rgba(255, 179, 209, 0.28);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    animation: rise 260ms ease-out;
+    cursor: default;
+  }
+  .card:focus { outline: none; }
+  .eyebrow { margin: 0; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .final { margin: 4px 0 0; font-family: var(--font-display); font-size: 76px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--batter); }
+  .final-label { margin: 0; color: var(--muted); }
+  .newbest {
+    margin: 8px 0 0;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(255, 92, 157, 0.16);
+    color: var(--neon-soft);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  /* "Continue (ad)" and "Play again" are deliberately identical in size, font and colour. */
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 16px; width: 100%; }
+  .btn {
+    flex: 1 1 130px;
+    min-height: 48px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    border: 1px solid var(--neon);
+    background: var(--neon);
+    color: #2b0718;
+    font: 400 18px var(--font-display);
+    cursor: pointer;
+  }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+  .notice { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); text-wrap: balance; }
+  .link-btn {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 600 14px var(--font-body);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .share-text {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 13px;
+    user-select: all;
+    -webkit-user-select: all;
+  }
+
+  /* Store covers: show the title only, larger. */
+  .cover-mode .logo { font-size: 15vmin; animation: none; }
+  .cover-mode .tagline, .cover-mode .rules, .cover-mode .cta, .cover-mode .mute { display: none; }
+
+  :root[lang="he"] .eyebrow, :root[lang="he"] .cta, :root[lang="he"] .best-line { letter-spacing: 0; }
+
+  /* Landscape phones: smaller sign so it stays clear of the stack. */
+  @media (max-height: 440px) {
+    .overlay.menu { padding-top: 12px; }
+    .sign { gap: 8px; }
+    .logo { font-size: clamp(32px, 11vh, 78px); }
+    .rules { display: none; }
+  }
+
+  @keyframes hum { 0%, 91%, 95%, 100% { opacity: 1; } 93% { opacity: 0.55; } }
+  @keyframes pulse { 50% { opacity: 0.45; } }
+  @keyframes rise { from { transform: translateY(14px); opacity: 0.4; } }
+  @media (prefers-reduced-motion: reduce) {
+    .logo, .cta, .card { animation: none; }
+    .score { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="stage" id="stage" aria-label="Short Stack game">
+  <canvas id="game"></canvas>
+
+  <div class="hud" id="hud" hidden>
+    <div class="score" id="score" aria-live="polite">0</div>
+    <p class="best-line" id="bestLine"></p>
+  </div>
+
+  <button class="mute" id="mute" type="button" aria-pressed="false" aria-label="Sound">
+    <svg id="iconOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+    <svg id="iconOff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+  </button>
+
+  <div class="overlay menu" id="menu">
+    <div class="sign">
+      <h1 class="logo">Short<br>Stack</h1>
+      <p class="tagline" id="tagline">How tall can you stack?</p>
+      <p class="rules" id="rules">Drop each pancake right on top of the last one. Whatever hangs over gets cut off.</p>
+      <p class="cta" id="cta"></p>
+    </div>
+  </div>
+
+  <div class="overlay over" id="over" hidden>
+    <div class="card" id="card" role="dialog" aria-labelledby="overTitle" tabindex="-1">
+      <p class="eyebrow" id="overTitle">The stack fell</p>
+      <p class="final" id="final">0</p>
+      <p class="final-label" id="finalLabel">pancakes</p>
+      <p class="newbest" id="newBest" hidden>New best!</p>
+      <div class="actions">
+        <button class="btn" id="continue" type="button" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 9l5 3-5 3z" fill="currentColor"/></svg>
+          <span id="continueLabel">Continue</span>
+        </button>
+        <button class="btn" id="again" type="button">Play again</button>
+      </div>
+      <p class="notice" id="notice" hidden></p>
+      <button class="link-btn" id="share" type="button">Copy score</button>
+      <p class="share-text" id="shareText" hidden></p>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // Media mode is only used to record store videos and covers: ?media=demo or ?media=cover
+  const MEDIA = new URLSearchParams(location.search).get("media");
+
+  // ---------- Language ----------
+  const isHebrew = /^(he|iw)\b/i.test(navigator.language || "") && !MEDIA;
+  const finePointer = matchMedia("(pointer: fine)").matches;
+  const T = isHebrew ? {
+    tagline: "כמה גבוה תצליחו לערום?",
+    rules: "הפילו כל פנקייק בדיוק על הקודם. מה שבולט החוצה נחתך.",
+    cta: finePointer ? "קליק או רווח כדי להתחיל" : "הקישו כדי להתחיל",
+    loading: "טוען…",
+    best: "שיא",
+    over: "המגדל נפל",
+    unit: n => (n === 1 ? "פנקייק" : "פנקייקים"),
+    newBest: "שיא חדש!",
+    again: "שחקו שוב",
+    resume: "להמשיך",
+    resumeAria: "צפייה בפרסומת כדי להמשיך מאותו גובה",
+    noAd: "אין פרסומת זמינה כרגע. אפשר לשחק שוב.",
+    adblock: "ההמשך עם פרסומת לא זמין כשחוסם פרסומות פעיל.",
+    share: "העתקת תוצאה",
+    copied: "הועתק",
+    perfect: "מושלם",
+    sound: "צליל",
+    shareText: n => `ערמתי ${n} פנקייקים ב-Short Stack 🥞 תצליחו לעקוף אותי?`
+  } : {
+    tagline: "How tall can you stack?",
+    rules: "Drop each pancake right on top of the last one. Whatever hangs over gets cut off.",
+    cta: finePointer ? "Click or press Space to start" : "Tap to start",
+    loading: "Loading…",
+    best: "Best",
+    over: "The stack fell",
+    unit: n => (n === 1 ? "pancake" : "pancakes"),
+    newBest: "New best!",
+    again: "Play again",
+    resume: "Continue",
+    resumeAria: "Watch an ad to continue from this height",
+    noAd: "No ad available right now. You can play again.",
+    adblock: "Continue with an ad is unavailable while an ad blocker is on.",
+    share: "Copy score",
+    copied: "Copied",
+    perfect: "Perfect",
+    sound: "Sound",
+    shareText: n => `I stacked ${n} pancakes in Short Stack 🥞 Can you beat me?`
+  };
+
+  const $ = id => document.getElementById(id);
+  if (isHebrew) { document.documentElement.lang = "he"; document.documentElement.dir = "rtl"; }
+  $("tagline").textContent = T.tagline;
+  $("rules").textContent = T.rules;
+  $("cta").textContent = T.loading;
+  $("overTitle").textContent = T.over;
+  $("newBest").textContent = T.newBest;
+  $("again").textContent = T.again;
+  $("continueLabel").textContent = T.resume;
+  $("continue").setAttribute("aria-label", T.resumeAria);
+  $("share").textContent = T.share;
+  $("mute").setAttribute("aria-label", T.sound);
+
+  // ---------- Device storage (settings; also the score save outside CrazyGames) ----------
+  const local = {
+    get(key) { try { return localStorage.getItem("shortstack:" + key); } catch { return null; } },
+    set(key, value) { try { localStorage.setItem("shortstack:" + key, String(value)); } catch {} }
+  };
+
+  // ---------- Audio state ----------
+  let userMuted = local.get("muted") === "true";
+  let portalMuted = false;   // CrazyGames' own mute setting; it overrides the in-game toggle
+  let adPlaying = false;     // sound stays off while an ad is on screen
+  const silent = () => userMuted || portalMuted || adPlaying;
+
+  // ---------- CrazyGames platform (ads, game events, saves). Safe to call anywhere. ----------
+  const Platform = {
+    sdk: null,
+    adblock: false,
+    get on() { return this.sdk !== null; },
+
+    async init() {
+      const sdk = window.CrazyGames && window.CrazyGames.SDK;
+      if (!sdk || MEDIA) return;
+      try {
+        await sdk.init();
+        if (sdk.environment !== "crazygames" && sdk.environment !== "local") return;
+        this.sdk = sdk;
+      } catch (error) {
+        console.warn("CrazyGames SDK unavailable; playing without it.", error);
+        return;
+      }
+      this.call(s => {
+        portalMuted = Boolean(s.game.settings && s.game.settings.muteAudio);
+        s.game.addSettingsChangeListener(settings => {
+          portalMuted = Boolean(settings && settings.muteAudio);
+          renderMute();
+        });
+      });
+      // Ad-blocker detection can take a few seconds; it only changes the "Continue" button.
+      Promise.resolve(this.call(s => s.ad.hasAdblock()))
+        .then(blocked => { this.adblock = blocked === true; if (this.adblock) markContinueBlocked(); })
+        .catch(() => {});
+    },
+
+    call(fn) {
+      if (!this.sdk) return undefined;
+      try { return fn(this.sdk); } catch (error) { console.warn("CrazyGames SDK call failed", error); return undefined; }
+    },
+
+    // On CrazyGames the score lives in the SDK's data module (synced to the player's account).
+    loadBest() {
+      if (this.on) {
+        try { return Number(this.sdk.data.getItem("best")) || 0; } catch {}
+      }
+      return Number(local.get("best")) || 0;
+    },
+    saveBest(value) {
+      if (this.on) {
+        try {
+          const stored = Number(this.sdk.data.getItem("best")) || 0;
+          this.sdk.data.setItem("best", String(Math.max(stored, value)));
+          return;
+        } catch {}
+      }
+      local.set("best", Math.max(Number(local.get("best")) || 0, value));
+    },
+
+    // Resolves with { ok, code } once the ad has finished or failed. Never resolves before then,
+    // so callers can keep the game blocked while an ad is requested or showing.
+    showAd(type) {
+      return new Promise(resolve => {
+        if (!this.sdk) { resolve({ ok: false, code: "unavailable" }); return; }
+        let settled = false;
+        const finish = result => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(guard);
+          adPlaying = false;
+          resolve(result);
+        };
+        // Last-resort guard for an ad that never starts, so a lost callback can't freeze the game.
+        // Once an ad is playing, the SDK always follows with adFinished or adError.
+        const guard = setTimeout(() => finish({ ok: false, code: "timeout" }), 60000);
+        try {
+          Promise.resolve(this.sdk.ad.requestAd(type, {
+            adStarted: () => { if (!settled) { clearTimeout(guard); adPlaying = true; } },
+            adFinished: () => finish({ ok: true }),
+            adError: error => finish({ ok: false, code: error && error.code })
+          })).catch(() => finish({ ok: false, code: "other" }));
+        } catch {
+          finish({ ok: false, code: "other" });
+        }
+      });
+    }
+  };
+
+  // ---------- Look ----------
+  const css = getComputedStyle(document.documentElement);
+  const token = name => css.getPropertyValue(name).trim();
+  const C = {
+    wall: token("--wall"),
+    wallDeep: token("--wall-deep"),
+    neon: token("--neon"),
+    neonSoft: token("--neon-soft"),
+    batter: token("--batter"),
+    muted: token("--muted"),
+    syrup: "#7a2f10",
+    butter: "#ffe48f",
+    counterTop: "#ddd4c3",
+    checkLight: "#e9e3d7",
+    checkDark: "#1d2227",
+    plate: "#f4f2ed",
+    plateWell: "#e1dcd1"
+  };
+  // Three batter shades so the stack doesn't look copy-pasted: [top, middle, bottom edge]
+  const BATTER = [
+    ["#f6cf86", "#dd9a45", "#a9642a"],
+    ["#f3c67a", "#d38d3c", "#9c5a24"],
+    ["#f8d796", "#e2a556", "#b06c31"]
+  ];
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- Geometry ----------
+  const stage = $("stage");
+  const canvas = $("game");
+  const ctx = canvas.getContext("2d");
+  const PH = 22;          // pancake thickness
+  const STEP = 16;        // each pancake squashes a little into the one below
+  const PLATE_TOP = 10;   // world y where the first pancake sits
+  const HOVER = 30;       // how high the sliding pancake floats above its landing spot
+  const GRAVITY = 2600;
+
+  let W = 0, H = 0, dpr = 1, cx = 0, groundY = 0, maxW = 240;
+
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    W = r.width; H = r.height;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2;
+    groundY = H - Math.max(72, Math.min(120, H * 0.14));
+  }
+
+  const rowBottom = i => PLATE_TOP + i * STEP;
+
+  // ---------- State ----------
+  let state = "menu";        // menu | play | over | cover
+  let ready = false;         // input waits until the platform has initialised
+  let adBusy = false;        // true while an ad is requested or showing
+  let stack = [], mover = null, faller = null;
+  let chunks = [], particles = [], popups = [];
+  let cam = 0, shake = 0, time = 0, overAt = 0, round = 0;
+  let score = 0, combo = 0, best = 0;
+  let continuedThisRun = false, rewardedOff = false;
+  let runStartBest = 0, celebratedThisRun = false;
+  let playSince = 0, cardAt = 0;   // guards against taps and keys that carry over between screens
+
+  function makePancake(x, w, perfect) {
+    const specks = [];
+    for (let i = 0; i < 5; i++) specks.push({ fx: Math.random() * 0.8 - 0.4, fy: 0.45 + Math.random() * 0.35, r: 0.8 + Math.random() * 1.1 });
+    return { x, w, perfect, tint: (Math.random() * BATTER.length) | 0, specks };
+  }
+
+  function reset() {
+    maxW = Math.round(Math.min(W * 0.62, 250));
+    stack = [makePancake(0, maxW, false)];
+    chunks = []; particles = []; popups = [];
+    faller = null; score = 0; combo = 0; cam = 0; shake = 0;
+    continuedThisRun = false;
+    runStartBest = best;
+    celebratedThisRun = false;
+    spawnMover();
+    renderScore(false);
+  }
+
+  function spawnMover() {
+    const top = stack[stack.length - 1];
+    const n = stack.length;
+    const range = maxW * 0.8 + 34;
+    const side = n % 2 ? -1 : 1;
+    mover = { x: side * range, w: top.w, dir: -side, speed: Math.min(150 + n * 7, 440), range, tint: (Math.random() * BATTER.length) | 0 };
+  }
+
+  // ---------- Sound (WebAudio, starts after the first tap) ----------
+  const sfx = (() => {
+    let ac = null;
+    function audio() {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+      }
+      if (ac.state === "suspended") ac.resume();
+      return ac;
+    }
+    function tone(type, f0, f1, dur, gain, delay = 0) {
+      if (silent()) return;
+      const a = audio(); if (!a) return;
+      const t = a.currentTime + delay;
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(a.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    }
+    function hiss(dur, gain, freq) {
+      if (silent()) return;
+      const a = audio(); if (!a) return;
+      const len = Math.floor(a.sampleRate * dur);
+      const buf = a.createBuffer(1, len, a.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = a.createBufferSource(), filter = a.createBiquadFilter(), g = a.createGain();
+      src.buffer = buf; filter.type = "bandpass"; filter.frequency.value = freq; g.gain.value = gain;
+      src.connect(filter).connect(g).connect(a.destination);
+      src.start();
+    }
+    const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+    return {
+      unlock() { if (!silent()) audio(); },
+      thud() { tone("sine", 200, 70, 0.14, 0.4); },
+      slice() { hiss(0.13, 0.5, 2600); },
+      perfect(n) {
+        const f = 523.25 * Math.pow(2, SCALE[Math.min(n - 1, SCALE.length - 1)] / 12);
+        tone("triangle", f, f * 1.005, 0.26, 0.2);
+        tone("sine", f * 2, f * 2, 0.14, 0.05, 0.03);
+      },
+      fall() { tone("sawtooth", 330, 55, 0.65, 0.09); }
+    };
+  })();
+
+  // ---------- Game flow ----------
+  function startGame() {
+    round++;
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    reset();
+    state = "play";
+    $("menu").hidden = true;
+    $("over").hidden = true;
+    $("hud").hidden = false;
+    playSince = time;
+    Platform.call(s => s.game.gameplayStart());
+  }
+
+  // Midgame ads only at this natural break: after a game over, when the player asks for another round.
+  async function playAgain() {
+    if (adBusy) return;
+    setAdBusy(true);
+    if (!MEDIA) await Platform.showAd("midgame");
+    setAdBusy(false);
+    window.focus();
+    startGame();
+  }
+
+  // Rewarded ad: the player explicitly chooses to watch one to keep their tower.
+  async function continueWithAd() {
+    if (adBusy || !canContinue()) return;
+    if (Platform.adblock) { markContinueBlocked(); return; }
+    setAdBusy(true);
+    const result = await Platform.showAd("rewarded");
+    setAdBusy(false);
+    window.focus();
+    if (result.ok) { revive(); return; }
+    if (result.code === "adblock" || result.code === "adsDisabledBasicLaunch") rewardedOff = true;
+    $("continue").hidden = true;
+    showNotice(result.code === "adblock" ? T.adblock : T.noAd);
+    $("card").focus({ preventScroll: true });
+  }
+
+  // With an ad blocker the Continue button stays visible but disabled, with a note saying why.
+  function markContinueBlocked() {
+    if ($("over").hidden || $("continue").hidden) return;
+    $("continue").disabled = true;
+    showNotice(T.adblock);
+  }
+
+  function canContinue() {
+    return Platform.on && !rewardedOff && !continuedThisRun && score >= 3;
+  }
+
+  function revive() {
+    continuedThisRun = true;
+    combo = 0;
+    state = "play";
+    $("over").hidden = true;
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    spawnMover();
+    playSince = time;
+    Platform.call(s => s.game.gameplayStart());
+  }
+
+  function setAdBusy(busy) {
+    adBusy = busy;
+    $("again").disabled = busy;
+    $("continue").disabled = busy || Platform.adblock;
+  }
+
+  function showNotice(text) {
+    const el = $("notice");
+    el.textContent = text;
+    el.hidden = !text;
+  }
+
+  function act() {
+    if (!ready || adBusy) return;
+    sfx.unlock();
+    if (state === "menu") startGame();
+    else if (state === "play") drop();
+    else if (state === "over" && time - overAt > 0.9 && !$("over").hidden) playAgain();
+  }
+
+  function drop() {
+    if (!mover || faller || time - playSince < 0.2) return;
+    faller = { x: mover.x, w: mover.w, y: rowBottom(stack.length) + HOVER, vy: 0, tint: mover.tint };
+    mover = null;
+  }
+
+  function land() {
+    const top = stack[stack.length - 1];
+    const f = faller;
+    faller = null;
+    const y = rowBottom(stack.length);
+    const dx = f.x - top.x;
+    const tolerance = Math.max(4, top.w * 0.035);
+
+    if (Math.abs(dx) <= tolerance) {
+      combo++;
+      const w = combo >= 3 ? Math.min(maxW, top.w + 5 + combo) : top.w;
+      const p = makePancake(top.x, w, true);
+      p.tint = f.tint;
+      stack.push(p);
+      score++;
+      sfx.thud();
+      sfx.perfect(combo);
+      popups.push({ text: combo > 1 ? `${T.perfect} ×${combo}` : T.perfect, x: top.x, y: y + PH + 18, life: 1 });
+      sparkle(top.x, y + PH, w);
+    } else {
+      const fL = f.x - f.w / 2, fR = f.x + f.w / 2;
+      const tL = top.x - top.w / 2, tR = top.x + top.w / 2;
+      const L = Math.max(fL, tL), R = Math.min(fR, tR);
+
+      if (R - L <= 0.5) {
+        chunks.push({ x: f.x, y, w: f.w, vx: Math.sign(dx) * 70, vy: 150, rot: 0, vr: Math.sign(dx) * 2.6, tint: f.tint });
+        gameOver();
+        return;
+      }
+
+      combo = 0;
+      const p = makePancake((L + R) / 2, R - L, false);
+      p.tint = f.tint;
+      stack.push(p);
+      score++;
+      const cutL = dx > 0 ? tR : fL, cutR = dx > 0 ? fR : tL;
+      chunks.push({ x: (cutL + cutR) / 2, y, w: cutR - cutL, vx: Math.sign(dx) * 90, vy: 120, rot: 0, vr: Math.sign(dx) * 3, tint: f.tint });
+      sfx.thud();
+      sfx.slice();
+      crumbs(dx > 0 ? R : L, y + PH / 2, Math.sign(dx));
+    }
+
+    renderScore(true);
+    spawnMover();
+  }
+
+  function gameOver() {
+    state = "over";
+    overAt = time;
+    sfx.fall();
+    shake = reduceMotion ? 0 : 9;
+    Platform.call(s => s.game.gameplayStop());
+
+    const isNewBest = score > runStartBest;
+    if (score > best) {
+      best = score;
+      Platform.saveBest(best);
+    }
+    // Celebrate real records only (not the first game or tiny scores), once per run.
+    if (isNewBest && runStartBest > 0 && score >= 10 && !celebratedThisRun) {
+      celebratedThisRun = true;
+      Platform.call(s => s.game.happytime());
+    }
+    renderScore(false);
+
+    const thisRound = round;
+    setTimeout(() => {
+      if (state !== "over" || round !== thisRound) return;
+      $("final").textContent = score;
+      $("finalLabel").textContent = T.unit(score);
+      $("newBest").hidden = !isNewBest;
+      $("shareText").hidden = true;
+      $("share").textContent = T.share;
+      $("share").hidden = Platform.on;   // no outbound sharing on game portals
+      const offerContinue = canContinue();
+      $("continue").hidden = !offerContinue;
+      setAdBusy(false);
+      showNotice(offerContinue && Platform.adblock ? T.adblock : "");
+      cardAt = performance.now();
+      $("over").hidden = false;
+      // Focus the card, never a button: the drop key must not press "Continue" (an ad) by accident.
+      $("card").focus({ preventScroll: true });
+    }, 750);
+  }
+
+  function renderScore(bump) {
+    const el = $("score");
+    el.textContent = score;
+    $("bestLine").textContent = `${T.best} ${best}`;
+    $("bestLine").hidden = best === 0;
+    if (bump && !reduceMotion) {
+      el.classList.add("bump");
+      setTimeout(() => el.classList.remove("bump"), 120);
+    }
+  }
+
+  // ---------- Effects ----------
+  function sparkle(x, y, w) {
+    const colors = [C.butter, C.neonSoft, "#ffffff"];
+    for (let i = 0; i < 16; i++) {
+      const side = i % 2 ? 1 : -1;
+      particles.push({
+        x: x + side * (w / 2) * (0.6 + Math.random() * 0.4), y,
+        vx: side * (40 + Math.random() * 120), vy: 120 + Math.random() * 220,
+        life: 0.7 + Math.random() * 0.4, size: 2 + Math.random() * 2.5,
+        color: colors[i % colors.length], gravity: 500
+      });
+    }
+  }
+
+  function crumbs(x, y, dir) {
+    for (let i = 0; i < 7; i++) {
+      particles.push({
+        x, y, vx: dir * (30 + Math.random() * 110), vy: 60 + Math.random() * 140,
+        life: 0.6 + Math.random() * 0.4, size: 1.5 + Math.random() * 2,
+        color: BATTER[i % 3][2], gravity: 900
+      });
+    }
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    time += dt;
+    if (MEDIA === "demo") demoStep();
+
+    if (mover) {
+      mover.x += mover.dir * mover.speed * dt;
+      if (Math.abs(mover.x) > mover.range) {
+        mover.x = Math.sign(mover.x) * mover.range;
+        mover.dir *= -1;
+      }
+    }
+
+    if (faller) {
+      faller.vy -= GRAVITY * dt;
+      faller.y += faller.vy * dt;
+      if (faller.y <= rowBottom(stack.length)) land();
+    }
+
+    for (const c of chunks) {
+      c.vy -= GRAVITY * 0.7 * dt;
+      c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr * dt;
+    }
+    chunks = chunks.filter(c => screenY(c.y) < H + 200);
+
+    for (const p of particles) {
+      p.vy -= p.gravity * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+    }
+    particles = particles.filter(p => p.life > 0);
+
+    for (const p of popups) { p.y += 40 * dt; p.life -= dt * 0.9; }
+    popups = popups.filter(p => p.life > 0);
+
+    if (state !== "cover") {
+      const topWorld = rowBottom(stack.length) + HOVER + PH;
+      const target = Math.max(0, topWorld - groundY + Math.max(H * 0.36, 170));
+      cam += (target - cam) * Math.min(1, dt * 5);
+    }
+
+    shake = Math.max(0, shake - dt * 30);
+  }
+
+  // ---------- Draw ----------
+  let shakeX = 0, shakeY = 0;
+  const screenY = worldY => groundY - (worldY - cam) + shakeY;
+  const screenX = x => cx + x + shakeX;
+
+  function rr(x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawWall() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, C.wallDeep);
+    g.addColorStop(1, C.wall);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subway tiles, scrolling at half speed for depth
+    const th = 26, tw = 52, wallCam = cam * 0.5;
+    ctx.strokeStyle = "rgba(255,255,255,0.045)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let k = Math.floor((groundY - H + wallCam) / th); ; k++) {
+      const y = groundY - (k * th - wallCam);
+      if (y < -th) break;
+      ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5);
+      for (let x = k % 2 ? tw / 2 : 0; x < W; x += tw) { ctx.moveTo(x + 0.5, y); ctx.lineTo(x + 0.5, y - th); }
+    }
+    ctx.stroke();
+
+    // Neon OPEN sign, mounted low on the wall (left off the store covers, which may show only the title)
+    const signY = groundY - 150 + cam * 0.5;
+    if (state !== "cover" && signY > -60 && signY < H + 60) {
+      const flicker = !reduceMotion && ((time * 9) | 0) % 53 === 0 ? 0.35 : 1;
+      const sx = Math.min(W - 58, cx + maxW * 0.95 + 40);
+      ctx.save();
+      ctx.globalAlpha = 0.9 * flicker;
+      ctx.font = "30px Monoton, 'Secular One', sans-serif";
+      ctx.textAlign = "center";
+      ctx.direction = "ltr";
+      ctx.shadowColor = C.neon;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = C.neonSoft;
+      ctx.fillText("OPEN", sx, signY);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.55;
+      ctx.font = "600 11px Rubik, sans-serif";
+      ctx.fillStyle = C.muted;
+      ctx.fillText("24 HRS", sx, signY + 18);
+      ctx.restore();
+    }
+  }
+
+  function drawBestLine() {
+    if (best < 2 || state === "cover") return;
+    const y = screenY(rowBottom(best) + PH);
+    if (y < -20 || y > H + 20) return;
+    ctx.save();
+    ctx.strokeStyle = C.neon;
+    ctx.globalAlpha = 0.55;
+    ctx.setLineDash([6, 7]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(16, y); ctx.lineTo(W - 16, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = C.neonSoft;
+    ctx.font = "600 11px Rubik, sans-serif";
+    ctx.textAlign = isHebrew ? "right" : "left";
+    ctx.fillText(`${T.best.toUpperCase()} ${best}`, isHebrew ? W - 18 : 18, y - 6);
+    ctx.restore();
+  }
+
+  function drawCounter() {
+    const top = screenY(0) + 6;
+    if (top > H) return;
+    ctx.fillStyle = C.counterTop;
+    ctx.fillRect(0, top, W, 12);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillRect(0, top, W, 2);
+    const s = 20;
+    for (let y = top + 12, r = 0; y < H; y += s, r++) {
+      for (let x = 0, c = r % 2; x < W; x += s, c++) {
+        ctx.fillStyle = c % 2 ? C.checkDark : C.checkLight;
+        ctx.fillRect(x, y, s, s);
+      }
+    }
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(0, top + 12, W, 6);
+
+    // Plate
+    const px = screenX(0), py = screenY(4);
+    const rx = maxW * 0.68;
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath(); ctx.ellipse(px, py + 6, rx * 1.02, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.plate;
+    ctx.beginPath(); ctx.ellipse(px, py, rx, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.plateWell;
+    ctx.beginPath(); ctx.ellipse(px, py - 1, rx * 0.74, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawPancake(x, bottomY, w, p, rot = 0, butter = false) {
+    if (w <= 0.5) return;
+    const h = PH, pal = BATTER[p.tint || 0];
+    ctx.save();
+    ctx.translate(x, bottomY - h / 2);
+    if (rot) ctx.rotate(rot);
+
+    const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    g.addColorStop(0, pal[0]); g.addColorStop(0.5, pal[1]); g.addColorStop(1, pal[2]);
+    rr(-w / 2, -h / 2, w, h, h / 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    // Golden top face
+    rr(-w / 2 + 3, -h / 2 + 1.5, w - 6, h * 0.36, h * 0.3);
+    ctx.fillStyle = "rgba(255, 236, 184, 0.5)";
+    ctx.fill();
+
+    // Little bubbles on the side
+    if (p.specks) {
+      ctx.fillStyle = "rgba(120, 62, 20, 0.35)";
+      for (const s of p.specks) {
+        const sx = s.fx * w;
+        if (Math.abs(sx) > w / 2 - 6) continue;
+        ctx.beginPath(); ctx.arc(sx, -h / 2 + s.fy * h, s.r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // Syrup on perfect drops
+    if (p.perfect) {
+      ctx.fillStyle = C.syrup;
+      rr(-w / 2 + 3, -h / 2 - 1, w - 6, 5, 2.5);
+      ctx.fill();
+      for (const fx of [-0.28, 0.2]) {
+        if (Math.abs(fx * w) > w / 2 - 8) continue;
+        rr(fx * w - 2, -h / 2 + 1, 4, 7 + Math.abs(fx) * 8, 2);
+        ctx.fill();
+      }
+    }
+
+    if (butter) {
+      ctx.rotate(-0.08);
+      rr(-9, -h / 2 - 8, 18, 10, 2.5);
+      ctx.fillStyle = C.butter;
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillRect(-6, -h / 2 - 6.5, 7, 2);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    shakeX = shake ? (Math.random() * 2 - 1) * shake : 0;
+    shakeY = shake ? (Math.random() * 2 - 1) * shake : 0;
+
+    drawWall();
+    drawBestLine();
+    drawCounter();
+
+    for (let i = 0; i < stack.length; i++) {
+      const p = stack[i];
+      const y = screenY(rowBottom(i));
+      if (y < -PH || y > H + PH) continue;
+      const isTop = i === stack.length - 1;
+      drawPancake(screenX(p.x), y, p.w, p, 0, isTop && p.perfect && state !== "over");
+    }
+
+    if (faller) drawPancake(screenX(faller.x), screenY(faller.y), faller.w, { tint: faller.tint });
+    if (mover) {
+      const y = screenY(rowBottom(stack.length) + HOVER);
+      drawPancake(screenX(mover.x), y, mover.w, { tint: mover.tint });
+    }
+
+    for (const c of chunks) drawPancake(screenX(c.x), screenY(c.y), c.w, { tint: c.tint }, c.rot);
+
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.6));
+      ctx.fillStyle = p.color;
+      ctx.fillRect(screenX(p.x) - p.size / 2, screenY(p.y) - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = "center";
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.5));
+      ctx.font = "22px 'Secular One', Rubik, sans-serif";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(10, 30, 37, 0.8)";
+      ctx.strokeText(p.text, screenX(p.x), screenY(p.y));
+      ctx.fillStyle = C.butter;
+      ctx.fillText(p.text, screenX(p.x), screenY(p.y));
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- Media mode (store video and covers) ----------
+  let demoMover = null, demoPrevX = 0;
+  function demoStep() {
+    if (state === "menu" && ready) { startGame(); return; }
+    if (state !== "play" || !mover || faller) return;
+    if (mover !== demoMover) { demoMover = mover; demoPrevX = mover.x; return; }
+    // Mostly perfect drops, with a deliberate small miss every few pancakes so the slicing shows.
+    const top = stack[stack.length - 1];
+    const n = stack.length;
+    const aim = top.x + (n % 6 === 0 ? (n % 12 === 0 ? 9 : -9) : 0);
+    const crossed = Math.sign(demoPrevX - aim) !== Math.sign(mover.x - aim);
+    demoPrevX = mover.x;
+    if (crossed) { mover.x = aim; drop(); }
+  }
+
+  function buildCover() {
+    state = "cover";
+    document.body.classList.add("cover-mode");
+    maxW = Math.round(Math.min(W * 0.5, H * 0.42, 340));
+    const logoBottom = document.querySelector(".logo").getBoundingClientRect().bottom;
+    const count = Math.max(8, Math.min(40, Math.floor((groundY - logoBottom - 70) / STEP)));
+    stack = [];
+    for (let i = 0; i < count; i++) {
+      const wobble = Math.sin(i * 1.7) * 5;
+      const p = makePancake(i === 0 ? 0 : wobble, maxW * (1 - (i % 5 === 4 ? 0.06 : 0)), i % 3 !== 1);
+      stack.push(p);
+    }
+    stack[stack.length - 1].perfect = true;
+    mover = null; faller = null; cam = 0;
+  }
+
+  // ---------- Loop ----------
+  let last = 0;
+  function frame(now) {
+    const dt = Math.min(0.033, (now - (last || now)) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Input ----------
+  stage.addEventListener("pointerdown", e => {
+    if (e.target.closest("button, .card")) return;
+    e.preventDefault();
+    window.focus();
+    act();
+  });
+  const SCROLL_KEYS = ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End"];
+  const cardIsNew = () => state === "over" && (time - overAt <= 0.9 || performance.now() - cardAt < 400);
+  window.addEventListener("keydown", e => {
+    const onButton = document.activeElement && document.activeElement.tagName === "BUTTON";
+    // Game keys must never scroll the portal page around the game frame.
+    if (SCROLL_KEYS.includes(e.code) && !(onButton && e.code === "Space")) e.preventDefault();
+    if (!["Space", "Enter", "ArrowDown"].includes(e.code)) return;
+    // Right after a game over, swallow the drop key so it can't press a card button by accident.
+    if (cardIsNew() || (state === "over" && e.repeat)) { e.preventDefault(); return; }
+    if (e.repeat || onButton) return;
+    e.preventDefault();
+    act();
+  });
+
+  $("again").addEventListener("click", () => { if (cardIsNew()) return; sfx.unlock(); playAgain(); });
+  $("continue").addEventListener("click", () => { if (cardIsNew()) return; sfx.unlock(); continueWithAd(); });
+
+  $("share").addEventListener("click", () => {
+    const text = T.shareText(score);
+    const btn = $("share");
+    const fallback = () => {
+      const box = $("shareText");
+      box.textContent = text;
+      box.hidden = false;
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+    };
+    try {
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = T.copied;
+        setTimeout(() => { btn.textContent = T.share; }, 1600);
+      }, fallback);
+    } catch { fallback(); }
+  });
+
+  function renderMute() {
+    const off = userMuted || portalMuted;
+    const btn = $("mute");
+    btn.setAttribute("aria-pressed", String(off));
+    btn.setAttribute("aria-disabled", String(portalMuted));
+    $("iconOn").hidden = off;
+    $("iconOff").hidden = !off;
+  }
+  $("mute").addEventListener("click", e => {
+    if (portalMuted) return;   // the portal's mute setting wins over the in-game toggle
+    userMuted = !userMuted;
+    local.set("muted", userMuted);
+    renderMute();
+    if (!userMuted) sfx.unlock();
+    if (e.detail > 0) e.currentTarget.blur();
+  });
+
+  window.addEventListener("resize", resize);
+
+  // ---------- Boot ----------
+  async function boot(data) {
+    if (data && typeof data.muted === "boolean") userMuted = data.muted;
+    resize();
+    reset();
+    renderMute();
+
+    if (MEDIA === "cover") {
+      ready = true;
+      if (document.fonts) await document.fonts.ready;
+      buildCover();
+      draw();
+      document.documentElement.dataset.ready = "true";
+      return;
+    }
+
+    // The store video is recorded frame by frame, so demo mode is stepped from outside.
+    if (MEDIA === "demo") window.shortStackStep = dt => { update(dt); draw(); };
+    else requestAnimationFrame(frame);
+
+    // Wait for the platform (at most a few seconds) so the right save is loaded before play.
+    const init = Platform.init();
+    await Promise.race([init, new Promise(r => setTimeout(r, 5000))]);
+    if (!Platform.on) init.then(() => {
+      if (!Platform.on) return;
+      renderMute();
+      best = Math.max(best, Platform.loadBest());
+      Platform.saveBest(best);
+      renderScore(false);
+      if (state === "play") Platform.call(s => s.game.gameplayStart());
+    });
+    renderMute();
+    Platform.call(s => s.game.loadingStart());
+    best = Math.max(best, Platform.loadBest(), data && typeof data.best === "number" && !Platform.on ? data.best : 0);
+    renderScore(false);
+    if (document.fonts) await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2000))]);
+    Platform.call(s => s.game.loadingStop());
+    ready = true;
+    $("cta").textContent = T.cta;
+    document.documentElement.dataset.ready = "true";
+  }
+
+  window.claude?.hot?.snapshot?.(() => ({ best, muted: userMuted }));
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+</body>
+</html>

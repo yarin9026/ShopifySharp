@@ -1,0 +1,315 @@
+<title>הקו הישר · מספרה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Suez+One&family=Assistant:wght@400;600;700&display=swap">
+<style>
+  /* Layout: single column storefront for a neighbourhood barbershop. Barber-pole stripes are the one bold motif;
+     everything else is quiet. Mobile first, with a sticky "book" bar at the bottom on phones. */
+  :root {
+    --paper: #f5f6f8;
+    --card: #ffffff;
+    --ink: #15203a;
+    --muted: #5c6578;
+    --line: #dde1e8;
+    --red: #c8102e;
+    --red-ink: #ffffff;
+    --navy: #1f3a6e;
+    --ok: #1d7a46;
+    --stripe-light: #ffffff;
+    --font-display: "Suez One", "Assistant", "Arial Hebrew", serif;
+    --font-body: "Assistant", "Arial Hebrew", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f1524; --card: #172036; --ink: #eef1f6; --muted: #a3acbd; --line: #2a3550;
+      --red: #e0334d; --red-ink: #ffffff; --navy: #7fa2e6; --ok: #4cc283; --stripe-light: #e9ecf2;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0f1524; --card: #172036; --ink: #eef1f6; --muted: #a3acbd; --line: #2a3550;
+    --red: #e0334d; --red-ink: #ffffff; --navy: #7fa2e6; --ok: #4cc283; --stripe-light: #e9ecf2;
+    color-scheme: dark;
+  }
+
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.55; }
+  .site { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 0 96px; }
+  h1, h2 { font-family: var(--font-display); font-weight: 400; text-wrap: balance; margin: 0; }
+  h2 { font-size: 1.6rem; }
+  p { margin: 0; }
+  a { color: var(--navy); }
+  button { font: inherit; }
+  :focus-visible { outline: 3px solid var(--navy); outline-offset: 2px; }
+
+  .demo-ribbon {
+    margin-inline: -16px;
+    padding: 8px 16px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  .pole {
+    height: 14px;
+    margin-inline: -16px;
+    background: repeating-linear-gradient(-45deg, var(--red) 0 14px, var(--stripe-light) 14px 28px, var(--navy) 28px 42px, var(--stripe-light) 42px 56px);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pole { background-size: 79.2px 79.2px; animation: spin 3s linear infinite; }
+    @keyframes spin { to { background-position: -79.2px 0; } }
+  }
+
+  header.hero { display: grid; gap: 14px; padding-block: 28px 24px; }
+  .hero h1 { font-size: clamp(2.6rem, 11vw, 4rem); line-height: 1; }
+  .hero .tag { font-size: 1.2rem; color: var(--muted); }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .status.open .dot { background: var(--ok); }
+  .status.open { color: var(--ok); }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 48px; padding: 0 22px; border-radius: 12px;
+    border: 2px solid var(--red); background: var(--red); color: var(--red-ink);
+    font-weight: 700; text-decoration: none; cursor: pointer;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+
+  section { display: grid; gap: 14px; padding-block: 26px; border-top: 1px solid var(--line); }
+
+  .prices { display: grid; gap: 0; }
+  .price-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding-block: 12px; border-bottom: 1px dashed var(--line); }
+  .price-row:last-child { border-bottom: 0; }
+  .price-row .name { font-weight: 700; }
+  .price-row .meta { color: var(--muted); font-size: 0.92rem; }
+  .price-row .price { font-family: var(--font-display); font-size: 1.3rem; font-variant-numeric: tabular-nums; grid-row: span 2; align-self: center; }
+
+  .book { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: grid; gap: 16px; }
+  .step-label { font-weight: 700; font-size: 0.95rem; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    min-height: 44px; padding: 6px 14px; border-radius: 10px; border: 1.5px solid var(--line);
+    background: var(--paper); color: var(--ink); cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .chip[aria-pressed="true"] { border-color: var(--red); background: var(--red); color: var(--red-ink); }
+  .chip:disabled { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
+  .chip small { display: block; font-size: 0.75rem; opacity: 0.85; }
+  .summary { display: grid; gap: 10px; padding: 14px; border-radius: 12px; background: var(--paper); }
+  .summary pre { margin: 0; white-space: pre-wrap; font: inherit; }
+  .note { font-size: 0.85rem; color: var(--muted); }
+
+  .hours { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; font-variant-numeric: tabular-nums; }
+  .hours .today { font-weight: 700; color: var(--red); }
+
+  .photo-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .photo {
+    aspect-ratio: 1; max-width: 100%; border-radius: 12px; display: grid; place-items: center; text-align: center;
+    padding: 8px; font-size: 0.85rem; color: var(--muted); border: 1.5px dashed var(--line); background: var(--card);
+  }
+
+  .bar {
+    position: fixed; inset: auto 0 0 0; z-index: 5;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--card); border-top: 1px solid var(--line);
+    display: flex; gap: 10px; justify-content: center;
+  }
+  .bar .btn { flex: 1; max-width: 360px; }
+  @media (min-width: 900px) { .bar { display: none; } .site { padding-block-end: 40px; } }
+</style>
+
+<div class="site" dir="rtl" lang="he">
+  <p class="demo-ribbon">אתר לדוגמה · העסק, הכתובת והתורים בדיוניים</p>
+  <div class="pole" aria-hidden="true"></div>
+
+  <header class="hero">
+    <h1>הקו הישר</h1>
+    <p class="tag">מספרת גברים שכונתית. תספורת מדויקת, בלי לחכות בתור.</p>
+    <p class="status" id="status"><span class="dot"></span><span id="statusText">בודק שעות…</span></p>
+    <div class="hero-actions">
+      <a class="btn" href="#book">קביעת תור</a>
+      <a class="btn ghost" href="#prices">מחירון</a>
+    </div>
+  </header>
+
+  <section id="prices" aria-labelledby="pricesTitle">
+    <h2 id="pricesTitle">מחירון</h2>
+    <div class="prices" id="priceList"></div>
+  </section>
+
+  <section id="book" aria-labelledby="bookTitle">
+    <h2 id="bookTitle">קביעת תור</h2>
+    <div class="book">
+      <div>
+        <p class="step-label">1. מה עושים?</p>
+        <div class="chips" id="serviceChips"></div>
+      </div>
+      <div>
+        <p class="step-label">2. באיזה יום?</p>
+        <div class="chips" id="dayChips"></div>
+      </div>
+      <div>
+        <p class="step-label">3. באיזו שעה?</p>
+        <div class="chips" id="timeChips"></div>
+      </div>
+      <div class="summary" id="summary" hidden>
+        <p class="step-label">ההודעה שתישלח למספרה בוואטסאפ:</p>
+        <pre id="message"></pre>
+        <button class="btn" id="send" type="button">שליחה בוואטסאפ</button>
+        <p class="note" id="sendNote">באתר האמיתי הכפתור פותח וואטסאפ עם ההודעה מוכנה, ישר למספר של העסק.</p>
+      </div>
+    </div>
+    <p class="note">התורים התפוסים באתר לדוגמה הם הדגמה בלבד.</p>
+  </section>
+
+  <section aria-labelledby="hoursTitle">
+    <h2 id="hoursTitle">שעות פתיחה</h2>
+    <div class="hours" id="hours"></div>
+  </section>
+
+  <section aria-labelledby="photosTitle">
+    <h2 id="photosTitle">מהכיסא שלנו</h2>
+    <div class="photo-strip">
+      <div class="photo">כאן תמונות של תספורות מהעסק</div>
+      <div class="photo">עוד תמונה</div>
+      <div class="photo">ועוד אחת</div>
+    </div>
+  </section>
+
+  <section aria-labelledby="findTitle">
+    <h2 id="findTitle">איך מגיעים</h2>
+    <p>כתובת לדוגמה · קומת קרקע, חניה ברחוב</p>
+    <div class="hero-actions">
+      <a class="btn ghost" href="https://waze.com/ul?q=%D7%9E%D7%A1%D7%A4%D7%A8%D7%94" target="_blank" rel="noopener">ניווט ב-Waze</a>
+    </div>
+  </section>
+</div>
+
+<nav class="bar" dir="rtl" aria-label="פעולות מהירות">
+  <a class="btn" href="#book">קביעת תור</a>
+  <a class="btn ghost" href="#prices">מחירון</a>
+</nav>
+
+<script>
+(() => {
+  const SERVICES = [
+    { id: "cut", name: "תספורת גבר", minutes: 30, price: 70 },
+    { id: "cutbeard", name: "תספורת + עיצוב זקן", minutes: 45, price: 95 },
+    { id: "beard", name: "עיצוב זקן", minutes: 20, price: 40 },
+    { id: "kids", name: "תספורת ילדים (עד גיל 12)", minutes: 25, price: 55 },
+    { id: "shave", name: "גילוח בתער חם", minutes: 30, price: 60 }
+  ];
+  // Sunday = 0 ... Saturday = 6, opening hours in minutes from midnight
+  const HOURS = { 0: [540, 1200], 1: [540, 1200], 2: [540, 1200], 3: [540, 1200], 4: [540, 1260], 5: [480, 840], 6: null };
+  const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const $ = id => document.getElementById(id);
+  const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+  // Current time in Israel, whatever the viewer's own time zone is.
+  function israelNow() {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Jerusalem", weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }).formatToParts(new Date()).map(p => [p.type, p.value]));
+    const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
+    return { weekday, minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute), date: new Date(`${parts.year}-${parts.month}-${parts.day}T12:00:00`) };
+  }
+  const now = israelNow();
+
+  // Prices
+  $("priceList").innerHTML = SERVICES.map(s => `
+    <div class="price-row">
+      <span class="name">${s.name}</span>
+      <span class="price">₪${s.price}</span>
+      <span class="meta">${s.minutes} דק׳</span>
+    </div>`).join("");
+
+  // Open / closed right now
+  const today = HOURS[now.weekday];
+  const status = $("status");
+  if (today && now.minutes >= today[0] && now.minutes < today[1]) {
+    status.classList.add("open");
+    $("statusText").textContent = `פתוח עכשיו · עד ${hhmm(today[1])}`;
+  } else {
+    let d = now.weekday, add = 0;
+    do { d = (d + 1) % 7; add++; } while (!HOURS[d]);
+    const opensToday = today && now.minutes < today[0];
+    $("statusText").textContent = opensToday ? `סגור עכשיו · נפתח היום ב-${hhmm(today[0])}` : `סגור עכשיו · נפתח ביום ${DAY_NAMES[d]} ב-${hhmm(HOURS[d][0])}`;
+  }
+
+  // Hours table
+  $("hours").innerHTML = [0, 1, 2, 3, 4, 5, 6].map(d => {
+    const h = HOURS[d], cls = d === now.weekday ? ' class="today"' : "";
+    return `<span${cls}>יום ${DAY_NAMES[d]}</span><span${cls}>${h ? `<bdi dir="ltr">${hhmm(h[0])}–${hhmm(h[1])}</bdi>` : "סגור"}</span>`;
+  }).join("");
+
+  // Booking
+  const pick = { service: null, day: null, time: null };
+  const days = [];
+  for (let i = 0; days.length < 6 && i < 10; i++) {
+    const date = new Date(now.date); date.setDate(date.getDate() + i);
+    const wd = (now.weekday + i) % 7;
+    if (!HOURS[wd]) continue;
+    days.push({ i, wd, date, label: i === 0 ? "היום" : i === 1 ? "מחר" : `יום ${DAY_NAMES[wd]}`, sub: `${date.getDate()}.${date.getMonth() + 1}` });
+  }
+
+  // Some slots look taken so the demo feels real (deterministic, not real bookings).
+  const taken = (dayIndex, minutes) => ((dayIndex * 7 + minutes / 30) * 2654435761 % 100) < 35;
+
+  function chip(label, sub, pressed, disabled, onClick) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip";
+    b.setAttribute("aria-pressed", String(pressed));
+    b.disabled = disabled;
+    b.innerHTML = sub ? `${label}<small>${sub}</small>` : label;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function render() {
+    const sc = $("serviceChips"); sc.replaceChildren();
+    for (const s of SERVICES) sc.append(chip(s.name, `₪${s.price}`, pick.service === s, false, () => { pick.service = s; pick.time = null; render(); }));
+
+    const dc = $("dayChips"); dc.replaceChildren();
+    for (const d of days) dc.append(chip(d.label, d.sub, pick.day === d, false, () => { pick.day = d; pick.time = null; render(); }));
+
+    const tc = $("timeChips"); tc.replaceChildren();
+    if (!pick.service || !pick.day) {
+      const p = document.createElement("p"); p.className = "note"; p.textContent = "בחרו קודם שירות ויום.";
+      tc.append(p);
+    } else {
+      const [open, close] = HOURS[pick.day.wd];
+      let shown = 0;
+      for (let m = open; m + pick.service.minutes <= close; m += 30) {
+        if (pick.day.i === 0 && m <= now.minutes + 30) continue;
+        const busy = taken(pick.day.i, m);
+        tc.append(chip(hhmm(m), busy ? "תפוס" : "", pick.time === m, busy, () => { pick.time = m; render(); }));
+        shown++;
+      }
+      if (!shown) {
+        const p = document.createElement("p"); p.className = "note"; p.textContent = "אין עוד תורים היום. בחרו יום אחר.";
+        tc.append(p);
+      }
+    }
+
+    const ready = pick.service && pick.day && pick.time !== null;
+    $("summary").hidden = !ready;
+    if (ready) {
+      $("message").textContent =
+        `היי, אשמח לקבוע תור ל${pick.service.name}\n` +
+        `${pick.day.label} (${pick.day.sub}) בשעה ${hhmm(pick.time)}\n` +
+        `מחיר: ₪${pick.service.price} · משך: ${pick.service.minutes} דק׳\nתודה!`;
+      $("sendNote").textContent = "באתר האמיתי הכפתור פותח וואטסאפ עם ההודעה מוכנה, ישר למספר של העסק.";
+    }
+  }
+
+  $("send").addEventListener("click", () => {
+    const text = $("message").textContent;
+    const done = () => { $("sendNote").textContent = "באתר לדוגמה ההודעה הועתקה במקום להישלח. באתר האמיתי היא נשלחת לוואטסאפ של העסק."; };
+    try { navigator.clipboard.writeText(text).then(done, done); } catch { done(); }
+  });
+
+  render();
+})();
+</script>
